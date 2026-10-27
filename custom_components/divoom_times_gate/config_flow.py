@@ -98,7 +98,20 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
             match = next((d for d in self._discovered if d.ip == ip), None)
             hardware = match.hardware if match else DEFAULT_HARDWARE
             device = TimesGate(ip, int(user_input[CONF_LOCAL_TOKEN]), session, hardware)
-            if await device.ping():
+            reachable = await device.ping()
+            if not reachable:
+                # Cloud discovery can report the wrong (or no) hardware revision,
+                # which picks the wrong endpoint. Try the other one before
+                # giving up: 402 -> :9000/divoom_api, 400 -> :80/post.
+                alt_hardware = 400 if hardware == 402 else 402
+                alt_device = TimesGate(
+                    ip, int(user_input[CONF_LOCAL_TOKEN]), session, alt_hardware
+                )
+                if await alt_device.ping():
+                    hardware = alt_hardware
+                    device = alt_device
+                    reachable = True
+            if reachable:
                 # Prefer the stable MAC as the unique id; fall back to the IP.
                 await self.async_set_unique_id((match.mac if match else "") or ip)
                 # Same device re-added (e.g. it got a new DHCP lease): update the
