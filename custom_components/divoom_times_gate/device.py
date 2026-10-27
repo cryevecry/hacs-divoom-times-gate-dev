@@ -77,6 +77,8 @@ class TimesGate:
             ) as resp:
                 data: DeviceResponse = await resp.json(content_type=None)
                 self.consecutive_failures = 0
+                if "error_code" not in data and "ReturnCode" in data:
+                    data["error_code"] = data["ReturnCode"]
                 if data.get("error_code") not in (0, None):
                     _LOGGER.warning(
                         "Times Gate %s rejected %s: %s",
